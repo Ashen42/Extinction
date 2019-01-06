@@ -77,4 +77,8 @@ public static class PlayGrid
 
         return false;
     }
+
+    public static Vector2 getOutsideOfScreenCoordinates() {
+        return new Vector2(-1f, -1f);
+    }
 }

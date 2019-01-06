@@ -41,13 +41,13 @@ public class Plant : MonoBehaviour
 
     private void UpdateStage()
     {
-        if (plantValue <= 4)
+        if (plantValue <= 5)
         {
             stage = plantStage.Seed;
             nutritrionalValue = 0;
             spriteRenderer.sprite = spriteSeed;
         }
-        if (plantValue >= 5 && plantValue <= 9)
+        if (plantValue >= 6 && plantValue <= 9)
         {
             stage = plantStage.Bush;
             nutritrionalValue = 1;

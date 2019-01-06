@@ -10,9 +10,7 @@ public class GameMaster : IntEventInvoker
     int numberOfSteps = 5;
 
     Timer stepTimer;
-    float stepDuration = .01f;
-
-
+    float stepDuration = .001f;
 
     // Start is called before the first frame update
     void Awake()

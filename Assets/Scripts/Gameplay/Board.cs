@@ -36,7 +36,7 @@ public class Board : MonoBehaviour {
                     spawnVegitation(spawnCoordinates);
                     //Instantiate(plant, spawnCoordinates, Quaternion.identity);
                 } else if (Random.Range(0f, 1f) < NPCreatureDensity) {
-                    spawnNPCreature(spawnCoordinates); 
+                    spawnNPCreature(spawnCoordinates,-1); 
                     //Instantiate(NPCreature, spawnCoordinates, Quaternion.Euler(0f, 0f, Random.Range(-180f, 180f)));
                 }
             }
@@ -58,14 +58,19 @@ public class Board : MonoBehaviour {
         CountVegitation++;
     }
 
-    public void spawnNPCreature(Vector3 spawnCoordinates){
+    public void spawnNPCreature(Vector3 spawnCoordinates,int age){
         if (CountNPCreatures >= maximumNumberOfNPCreatures) {
             //Debug.Log("Maximum number of NPCreatures have spawned.");
             return;
         }
 
-        // Spawn with random orientation
-        Instantiate(NPCreature, spawnCoordinates, Quaternion.Euler(0f,0f,Random.Range(-180f,180f)));
+        // Spawn with random orientation and predetermined or random age
+        GameObject creature = Instantiate(NPCreature, spawnCoordinates, Quaternion.Euler(0f,0f,Random.Range(-180f,180f)));
+        if (age == -1) {
+            creature.GetComponent<NPCreature>().setRandomAge();
+        } else {
+            creature.GetComponent<NPCreature>().setAge(age);
+        }
         CountNPCreatures++;
     }
 
