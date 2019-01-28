@@ -44,7 +44,7 @@ public class Board : MonoBehaviour {
 
         //spawn the player creatures
         GameObject player1 = Instantiate(playerCreature, (Vector3)PlayGrid.getGridCoordinates(new Vector2(30, 10)), Quaternion.identity);
-        player1.GetComponent<PlayCreature>().Birth(1, new Vector2(30, 10), true);
+        player1.GetComponent<PlayCreature>().Birth(1, new Vector2(30, 10), false);
     }
 
     public void spawnVegitation(Vector3 spawnCoordinates) {

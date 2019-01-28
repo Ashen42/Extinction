@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class NPCreature : MonoBehaviour {
+    // Output relevant debug logs yes/no
+    bool outputStats = false;
 
     //stats
     int carnivore = 0;
@@ -13,16 +15,19 @@ public class NPCreature : MonoBehaviour {
     Vector2 UnitPosition;
     Vector2 TargetUnitPosition;
     float direction;
-    public float satiation = 3;         // maximum amount of nutrition the NPCreature can take in
-    float metabolism = 0.5f;            // 0.2f means 5 steps for every 1 reduction in satiation
-    float chanceOfReproduction = 0.5f; // .07f works if reproduce only on same square.
+    Vector2 directionVector;
+
+    public float satiation = 3;         // start nutrition the NPCreature 
     float satiationMax = 6;             // maximum amount of nutrition the NPCreature can take in.
+    float metabolism = 0.5f;            // 0.2f means 5 steps for every 1 reduction in satiation
+    float chanceOfReproduction = 0.6f; // .07f works if reproduce only on same square.
     int ageMax = 52 * 5;                // maximum age the NPCreatre can become. Every step is a week. NPCreatues maximum age = 52 wks = 1 yr.
     int childrenMax = 3;
 
     // Utility
     bool adult = false;
     int age = 0;
+    int nutritionalValue;              // 2 as child, 5 as adult (see checkAdulthood() function)
     int children = 0;
     bool dead = false;
     List<GameObject> NPCreaturesInTheAfterlife = new List<GameObject>();
@@ -59,7 +64,6 @@ public class NPCreature : MonoBehaviour {
 
     private void Intelligence(int unused) {
         if (dead) { return; }
-
     }
 
     private void Move(int unused) {
@@ -70,6 +74,7 @@ public class NPCreature : MonoBehaviour {
     private IEnumerator MoveCoroutine() {
         // Randomise the distance walked (if NPCreature is not hungry)
         int movePoints;
+        bool reproduce = false;
         if (Hungry() || Horny()) {
             movePoints = speed;
         } else {
@@ -79,7 +84,7 @@ public class NPCreature : MonoBehaviour {
         // Start walking
         while (movePoints > 0) {
             UnitPosition = PlayGrid.getUnitCoordinates((Vector2)gameObject.GetComponent<Transform>().transform.position);
-            Vector2 directionVector = Vector2.zero;
+            directionVector = Vector2.zero;
 
             // Check if the NPCreature is hungry. If yes, determine in which direction there is a plant with the most nutrition
             if (Hungry()) {
@@ -99,7 +104,7 @@ public class NPCreature : MonoBehaviour {
             } else if (Horny() && NPCreatureObstacle.GetComponent<NPCreature>().Horny()){
                 // collision between two horny NPCreatures.
                 //Debug.Log("Horny NPCreatures collided");
-                Reproduce();
+                reproduce = true;
             }
 
             yield return null;
@@ -111,25 +116,44 @@ public class NPCreature : MonoBehaviour {
             foreach (Collider2D encounter in encounters) {
                 if (encounter != null) {
                     if (encounter.gameObject.tag == "Plant" && satiation > 0) {
-                        //Debug.Log("Old satiation: " + satiation);
                         satiation += encounter.gameObject.GetComponent<Plant>().GetEaten();
                         satiation = Mathf.Clamp(satiation, 0f, satiationMax);
-                        //Debug.Log("New Satiation: " + satiation);
                     } else if (encounter.gameObject.tag == "NPCreature") { // if NPCreatures accidentally step into the same space (which was empty), they will reproduce
                         //Debug.Log("NPCreatures overlapping at [" + PlayGrid.getUnitCoordinates(gameObject.transform.position).x + "," + PlayGrid.getUnitCoordinates(gameObject.transform.position).y + "]");
-                        if (encounter.gameObject.GetComponent<NPCreature>().Horny()) {
-                            Reproduce();
+                        if (Horny() && encounter.gameObject.GetComponent<NPCreature>().Horny()) {
+                            reproduce = true;
                         }
                     }
                 }
+            }
+
+            if (reproduce) {
+                Reproduce();
             }
 
             movePoints--;
         }
     }
 
+    // -------- Movement Utility Functions --------
+    #region MovementUtilityFunctions
+
     private Vector2 chooseRandomWalkingDirection() {
         // Choose a random direction to walk at if the NPCreature is not walking towards vegitation
+
+        // Randomly determine new orientation to move towards
+        if (Random.Range(0f, 1f) < 0.3f) {
+            // Choose random orientation
+            //gameObject.GetComponent<Transform>().rotation = Quaternion.Euler(0f, 0f, Random.Range(-180f, 180f));
+
+            // Alternative: choose rotation with maximum -45 to 45 degrees change
+            float zRotation = gameObject.GetComponent<Transform>().eulerAngles.z;
+            int sign = Random.value < .5 ? 1 : -1;
+            zRotation += Random.Range(10f, 45f) * sign;
+            gameObject.GetComponent<Transform>().eulerAngles = new Vector3(0, 0, zRotation);
+        }
+
+        // Use current orientation of gameObject as input to see what the correct (discrete) directionVector is.
         Vector2 directionVector = Vector2.zero;
         direction = gameObject.GetComponent<Transform>().eulerAngles.z;
         direction = direction + 45; // compensating for sprite orientation of 45 degrees
@@ -153,7 +177,7 @@ public class NPCreature : MonoBehaviour {
 
     private GameObject checkforNPColission(Vector2 directionVector) {
         // Check for accidental collision with other NPCreature
-        GameObject observed = SeeIfCollisionWithOtherNPCreature2(directionVector, 1, "NPCreature");
+        GameObject observed = SeeIfCollisionWithOtherObject(directionVector, 1, "NPCreature");
         return observed;
     }
 
@@ -168,31 +192,10 @@ public class NPCreature : MonoBehaviour {
         }
     }
 
-    private void Upkeep(int unused) {
-        if (dead) { return; }
-
-        satiation = satiation-metabolism;
-        age++;
-        checkAdulthood();
-
-        // Randomly determine new orientation to move towards
-        if (Random.Range(0f, 1f) < 0.3f) {
-            gameObject.GetComponent<Transform>().rotation = Quaternion.Euler(0f, 0f, Random.Range(-180f, 180f));
-        }
-    }
-
-    private bool Hungry() {
-        if (satiation < metabolism * 5) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     private Vector2 FindPlant() {
         Vector2 directionVector = Vector2.zero;
         Vector2 selectedDirectionVector = Vector2.zero;
-        int NutritionalValue = 0;
+        int NutritionalValue_temp = 0;
         for (int direction = 1; direction <= 8; direction++) {
             switch (direction) {
                 case 1: directionVector = Vector2.right + Vector2.up; break;
@@ -205,35 +208,22 @@ public class NPCreature : MonoBehaviour {
                 case 8: directionVector = Vector2.right; break; // x++
             }
 
-            GameObject observedPlant = SeeIfCollisionWithOtherNPCreature2(directionVector, 2, "Plant");
+            GameObject observedPlant = SeeIfCollisionWithOtherObject(directionVector, 2, "Plant");
             if (observedPlant != null) {
                 Vector2 plantLocation = UnitPosition + directionVector;
                 //Debug.Log("Plant observed at [" + plantLocation.x + "," + plantLocation.y + "]");
                 //observed.GetComponent<SpriteRenderer>().material.SetColor("_Color", new Color(0f, 1f, 0f, 1f));
-                if (observedPlant.GetComponent<Plant>().GetNutritionalValue() > NutritionalValue) {
+                if (observedPlant.GetComponent<Plant>().GetNutritionalValue() > NutritionalValue_temp) {
                     // if the observed plant has highest nutritional value seen thus far, take this as direction
-                    NutritionalValue = observedPlant.GetComponent<Plant>().GetNutritionalValue();
+                    NutritionalValue_temp = observedPlant.GetComponent<Plant>().GetNutritionalValue();
                     selectedDirectionVector = directionVector;
-                } else if (observedPlant.GetComponent<Plant>().GetNutritionalValue() == NutritionalValue && Random.Range(0f, 1f) < 0.5f) {
+                } else if (observedPlant.GetComponent<Plant>().GetNutritionalValue() == NutritionalValue_temp && Random.Range(0f, 1f) < 0.5f) {
                     // if observed plant has similar nutritional value, randomize if we choose this route to go.
                     selectedDirectionVector = directionVector;
                 }
             }
         }
         return selectedDirectionVector;
-    }
-
-    private bool checkAdulthood() {
-        // Check adulthood & adjust NPCreatures to adult size (distinguishing between child and adults)
-        if (age > ageMax / 3) {
-            if (!adult) { // if not an adult yet, set size to full
-                transform.localScale = new Vector2(1f, 1f);
-            }
-            adult = true;
-        } else {
-            adult = false;
-        }
-        return adult;
     }
 
     private Vector2 findMate() {
@@ -253,7 +243,7 @@ public class NPCreature : MonoBehaviour {
                 case 8: directionVector = Vector2.right; break; // x++
             }
 
-            GameObject observedMate = SeeIfCollisionWithOtherNPCreature2(directionVector, 3, "NPCreature");
+            GameObject observedMate = SeeIfCollisionWithOtherObject(directionVector, 3, "NPCreature");
             if (observedMate != null) {
                 Vector2 mateLocation = UnitPosition + directionVector;
                 if (observedMate.GetComponent<NPCreature>().Horny()) {
@@ -265,12 +255,76 @@ public class NPCreature : MonoBehaviour {
         return selectedDirectionVector;
     }
 
+    private GameObject SeeIfCollisionWithOtherObject(Vector3 RaycastDirection, int unitViewDistance, string tag) {
+        float length = PlayGrid.getUnitWorldSize().x * unitViewDistance * Vector3.Magnitude(RaycastDirection);
+        RaycastHit2D[] hit = Physics2D.RaycastAll(gameObject.transform.position, RaycastDirection.normalized, length);
+
+        Debug.DrawLine(gameObject.transform.position, gameObject.transform.position + length * RaycastDirection.normalized, Color.blue, gameMaster.getRoundDuration());
+
+        for (int i = 0; i < hit.Length; i++) {
+            if (hit[i].collider.gameObject.tag == tag) {
+                // Calculate the distance from the NPCreature to the next
+                float distance = Vector3.Distance(hit[i].transform.position, transform.position);
+                if (distance < 0.00001f) {
+                    //Debug.Log("Raycast hits own collider (distance = " + distance + ")");
+                } else {
+                    //Debug.Log("NPCreature sees " + tag);
+                    return hit[i].collider.gameObject;
+                }
+            }
+        }
+        return null;
+    }
+
+    #endregion
+    // --------------------------------------------
+
+    private void Upkeep(int unused) {
+        if (dead) { return; }
+
+        satiation = satiation-metabolism;
+        age++;
+        checkAdulthood();
+    }
+
+    private bool Hungry() {
+        if (satiation < satiationMax * 0.5) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public int GetEaten() {
+        GetComponent<SpriteRenderer>().material.SetColor("_Color", new Color(1f, 0f, 0f, 1f));
+        Destroy(gameObject);
+        //recycleLife(gameObject);
+        board.reduceNPCreatureCount();
+        Debug.Log("NPCreature eaten by Carnivore");
+        return nutritionalValue;
+    }
+
+    private bool checkAdulthood() {
+        // Check adulthood & adjust NPCreatures to adult size (distinguishing between child and adults)
+        if (age > ageMax / 3) {
+            if (!adult) { // if not an adult yet, set size to full
+                transform.localScale = new Vector2(1f, 1f);
+            }
+            adult = true;
+            nutritionalValue = 5;
+        } else {
+            adult = false;
+            nutritionalValue = 2;
+        }
+        return adult;
+    }
+
     private void Reproduce() {
         int i = Mathf.RoundToInt(Random.Range(1f, PlayGrid.PlayFieldSize.x-1));
         int j = Mathf.RoundToInt(Random.Range(1f, PlayGrid.PlayFieldSize.x-1));
         Vector3 spawnCoordinates = (Vector3)PlayGrid.getGridCoordinates(new Vector2(i, j));
         board.spawnNPCreature(spawnCoordinates,0);
-        Debug.Log("NPCreatures reproduced");
+        if (outputStats) Debug.Log("NPCreatures reproduced"); 
         //Debug.Log("NPCreatures created a child at [" + i + "," + j + "]");
 
         children++;
@@ -283,38 +337,17 @@ public class NPCreature : MonoBehaviour {
             Destroy(gameObject);
             //recycleLife(gameObject);    
             board.reduceNPCreatureCount();
-            Debug.Log("NPCreature died of starvation");
+            if (outputStats) Debug.Log("NPCreature died of starvation");
         } else if (age > ageMax) {
             Destroy(gameObject);
             //recycleLife(gameObject);
             board.reduceNPCreatureCount();
-            Debug.Log("NPCreature died of old age");
+            if(outputStats) Debug.Log("NPCreature died of old age");
         }
         /*
         if (children == 1) {Debug.Log("NPCreature left behind " + children + " child");
         } else {Debug.Log("NPCreature left behind " + children + " children");
         }*/
-    }
-
-    private GameObject SeeIfCollisionWithOtherNPCreature2(Vector3 RaycastDirection, int unitViewDistance, string tag) {
-        float length = PlayGrid.getUnitWorldSize().x * unitViewDistance * Vector3.Magnitude(RaycastDirection);
-        RaycastHit2D[] hit = Physics2D.RaycastAll(gameObject.transform.position, RaycastDirection.normalized, length);
-
-        Debug.DrawLine(gameObject.transform.position, gameObject.transform.position + length*RaycastDirection.normalized, Color.blue, gameMaster.getRoundDuration());
-
-        for (int i = 0; i < hit.Length; i++) {
-            if (hit[i].collider.gameObject.tag == tag) {
-                // Calculate the distance from the NPCreature to the next
-                float distance = Vector3.Distance(hit[i].transform.position, transform.position);
-                if (distance < 0.00001f) {
-                    //Debug.Log("Raycast hits own collider (distance = " + distance + ")");
-                } else {
-                    //Debug.Log("NPCreature sees " + tag);
-                    return hit[i].collider.gameObject;
-                }
-            } 
-        }
-        return null;
     }
 
     private void recycleLife(GameObject NPCreature) {
@@ -344,4 +377,7 @@ public class NPCreature : MonoBehaviour {
         }
         return false;
     }
+
+    public int GetNutritionalValue() { return nutritionalValue; }
+
 }
